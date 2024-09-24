@@ -1,1 +1,138 @@
 
+    #if defined(ESP32)
+    #include <WiFi.h>
+    #elif defined(ESP8266)
+    #include <ESP8266WiFi.h>
+    #endif
+    #include <LiquidCrystal_I2C.h>
+    #include <Bonezegei_DHT11.h>
+    #include <Firebase_ESP_Client.h>
+    #include <addons/TokenHelper.h>
+    #include <addons/RTDBHelper.h>
+    /****************************************************************************************************************/
+    #define WIFI_SSID "-----------------"
+    #define WIFI_PASSWORD "------------------"
+    #define API_KEY "--------------------------------------------"
+    #define DATABASE_URL "---------------------------------------"
+    #define USER_EMAIL "-----------------"
+    #define USER_PASSWORD "---------"
+    FirebaseData fbdo;
+    FirebaseAuth auth;
+    FirebaseConfig config;
+    Bonezegei_DHT11 dht(D4);
+
+    LiquidCrystal_I2C lcd(0x27,16,2);
+/****************************************************************************************************************/
+
+    int count = 0 ;
+    String msg; 
+    float h; 
+    float t;
+/****************************************************************************************************************/
+    void Connect_WiFi();
+    void Firebase_Store(String PATH,String MSG);
+    String Firebase_getString(String PATH);
+  /****************************************************************************************************************/
+    void setup()
+    {
+         Connect_WiFi(); 
+         dht.begin();  
+    }
+/****************************************************************************************************************/
+    void loop()
+    {
+      if (dht.getData()) { 
+      h = dht.getHumidity(); //Store humidity value in variable h
+      t = dht.getTemperature(); ////Store temperature value in variable t
+      
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("Humidity: ");
+      Serial.print("Humidity: ");
+      lcd.setCursor(9,0);
+      lcd.print(h);
+      Serial.print(h);
+      lcd.setCursor(14,0);
+      lcd.print(" %");
+      Serial.println(" %");
+
+      lcd.setCursor(0,1);
+      lcd.print("Temp: ");
+      Serial.print("Temperature: ");
+      lcd.setCursor(7,1);
+      lcd.print(t);
+      Serial.print(t);
+      lcd.setCursor(13,1);
+      lcd.print(" *C");
+      Serial.println(" *C");
+      Firebase_Store("/HUMIDITY/DATA",String(h));
+      Firebase_Store("/Temperature/DATA",String(t));
+      }
+    }
+/****************************************************************************************************************/
+    void Connect_WiFi()
+    {
+          Serial.begin(9600);
+          lcd.init();
+          lcd.backlight();
+          delay(100); 
+          WiFi.disconnect();
+          delay(800); 
+          Serial.println("Connecting to Wi-Fi");
+          lcd.setCursor(0,0);
+          lcd.print("Connecting to Wi-Fi"); 
+          WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+          Serial.print("Connecting to Wi-Fi");
+          
+          delay(100);
+          while (WiFi.status() != WL_CONNECTED)
+          {
+            Serial.print(".");
+            lcd.setCursor(0,1);
+            lcd.print(".");
+            delay(300);
+          }
+          Serial.println();
+          lcd.clear();
+          lcd.setCursor(0,0);
+          lcd.print("Connected ");
+          Serial.print("Connected with IP: ");
+          Serial.println(WiFi.localIP());
+          Serial.println();
+          Serial.printf("Firebase Client v%s\n\n", FIREBASE_CLIENT_VERSION);
+          config.api_key = API_KEY;
+          auth.user.email = USER_EMAIL;
+          auth.user.password = USER_PASSWORD;
+          config.database_url = DATABASE_URL;
+          config.token_status_callback = tokenStatusCallback;
+           #if defined(ESP8266)
+            fbdo.setBSSLBufferSize(2048 /* Rx buffer size in bytes from 512 - 16384 */, 2048 /* Tx buffer size in bytes from 512 - 16384 */);
+          #endif
+          Firebase.begin(&config, &auth);
+          Firebase.reconnectWiFi(true);
+          Firebase.setDoubleDigits(5);
+          config.timeout.serverResponse = 10 * 1000;
+    }
+/****************************************************************************************************************/
+    void Firebase_Store(String PATH,String MSG)
+    {
+          
+          
+          Serial.print("Uploading data \" ");
+          Serial.print(MSG);
+          Serial.print(" \"  to the location \" ");
+          Serial.print(PATH);
+          Serial.println(" \"");
+          Firebase.RTDB.setString(&fbdo, PATH, MSG);
+          delay(50);
+    }
+/****************************************************************************************************************/
+    String Firebase_getString(String PATH)
+    {
+      String msg = (Firebase.RTDB.getString(&fbdo, PATH) ? fbdo.to<const char *>() : fbdo.errorReason().c_str());
+      delay(50);
+      return msg;
+    }
+/****************************************************************************************************************/
+    
+
